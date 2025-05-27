@@ -26,9 +26,10 @@ CREATE TABLE IF NOT EXISTS public.contact
         ON DELETE NO ACTION
         NOT VALID
 )
+
 OR using pgadmin create table by ensuring these values
 ![image](https://github.com/user-attachments/assets/961d6d70-0791-4b7a-822a-e587e0d8354a) make a foreign key fk_linkedid referenced to id and referencing table contact table
-5. Give some data input like this
+6. Give some data input like this
 INSERT INTO contact (phonenumber, email, linkedid, linkprecedence, createdat, updatedat, deletedat)
 VALUES 
 ('123456', 'lorraine@hillvalley.edu', NULL, 'primary', NOW(), NOW(), NULL),
@@ -36,6 +37,6 @@ VALUES
 ('919191', 'george@hillvalley.edu', NULL, 'primary', NOW(), NOW(), NULL),
 ('717171', 'george@hillvalley.edu', 3, 'secondary', NOW(), NOW(), NULL);
 
-6. After this, run the program.
-7. Use http://localhost:3000/identify in postman
-8. Give the appropriate inputs to see the results
+7. After this, run the program.
+8. Use http://localhost:3000/identify in postman
+9. Give the appropriate inputs to see the results
