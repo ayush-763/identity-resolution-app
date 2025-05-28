@@ -1,4 +1,3 @@
-// index.js
 const express = require("express");
 require("dotenv").config();
 const routes = require("./routes/routes.js");
