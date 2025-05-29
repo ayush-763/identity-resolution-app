@@ -90,6 +90,23 @@ async function identifyContact({ email, phoneNumber }) {
         );
       }
     }
+    if (email != null && phoneNumber != null) {
+      const comboExists = expandedContacts.some(
+        (c) => c.email === email && c.phonenumber === phoneNumber
+      );
+
+      if (!comboExists) {
+        const { rows: inserted } = await pool.query(
+          `
+        INSERT INTO contact (email, phoneNumber, linkedid, linkprecedence, createdat, updatedat, deletedat)
+        VALUES ($1, $2, $3, 'secondary', NOW(), NOW(), NULL)
+        RETURNING *
+      `,
+          [email, phoneNumber, primaryContact.id]
+        );
+        expandedContacts.push(inserted[0]); // ✅ include in final processing
+      }
+    }
 
     const { rows: finalContacts } = await pool.query(
       `
