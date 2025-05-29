@@ -1,93 +1,127 @@
-const pool = require("../db.js");
+const pool = require("../db");
 
-const identifyContact = async ({ email, phoneNumber }) => {
+async function identifyContact({ email, phoneNumber }) {
   if (!email && !phoneNumber) {
-    throw new Error("Email or Phone number required");
+    return res.status(400).json({ error: "email or phoneNumber is required" });
   }
 
-  // Step 1: Find matching contacts
-  const { rows: existingContacts } = await pool.query(
-    `
-    SELECT * FROM contact 
-    WHERE (email = $1 OR phonenumber = $2) AND deletedat IS NULL
+  try {
+    const { rows: matchedContacts } = await pool.query(
+      `
+      SELECT * FROM contact
+      WHERE (email = $1 OR phoneNumber = $2)
+      AND deletedat IS NULL
     `,
-    [email, phoneNumber]
-  );
+      [email, phoneNumber]
+    );
 
-  // Step 2: If matches found
-  if (existingContacts.length > 0) {
-    const allContacts = [...existingContacts];
+    if (matchedContacts.length === 0) {
+      const { rows: inserted } = await pool.query(
+        `
+        INSERT INTO contact (email, phoneNumber, linkedid, linkprecedence, createdat, updatedat, deletedat)
+        VALUES ($1, $2, NULL, 'primary', NOW(), NOW(), NULL)
+        RETURNING *
+      `,
+        [email, phoneNumber]
+      );
 
-    // Step 3: Find the oldest primary
-    const primary = allContacts
+      return {
+        contact: {
+          primaryContactId: inserted[0].id,
+          emails: [inserted[0].email],
+          phoneNumbers: [inserted[0].phonenumber],
+          secondaryContactIds: [],
+        },
+      };
+    }
+
+    const allRelatedIds = new Set();
+    const emailsToSearch = new Set();
+    const phonesToSearch = new Set();
+
+    for (const contact of matchedContacts) {
+      allRelatedIds.add(contact.id);
+      if (contact.linkedid) {
+        allRelatedIds.add(contact.linkedid);
+      }
+      if (contact.email) emailsToSearch.add(contact.email);
+      if (contact.phonenumber) phonesToSearch.add(contact.phonenumber);
+    }
+
+    const { rows: newContacts } = await pool.query(
+      `
+  SELECT * FROM contact
+  WHERE (email = ANY($1::text[]) OR phoneNumber = ANY($2::text[]))
+  AND deletedat IS NULL
+`,
+      [[...emailsToSearch], [...phonesToSearch]]
+    );
+
+    for (const contact of newContacts) {
+      allRelatedIds.add(contact.id);
+      if (contact.linkedid) allRelatedIds.add(contact.linkedid);
+    }
+
+    const { rows: expandedContacts } = await pool.query(
+      `
+      SELECT * FROM contact
+      WHERE (id = ANY($1::int[]) OR linkedid = ANY($1::int[]))
+      AND deletedat IS NULL
+    `,
+      [Array.from(allRelatedIds)]
+    );
+
+    const primaryContact = expandedContacts
       .filter((c) => c.linkprecedence === "primary")
       .sort((a, b) => new Date(a.createdat) - new Date(b.createdat))[0];
 
-    // Step 4: Update other primaries to secondary
-    for (const contact of allContacts) {
-      if (contact.id !== primary.id && contact.linkprecedence === "primary") {
+    for (const contact of expandedContacts) {
+      if (
+        contact.id !== primaryContact.id &&
+        contact.linkedid !== primaryContact.id
+      ) {
         await pool.query(
-          `UPDATE contact SET linkprecedence = 'secondary', linkedid = $1, updatedat = NOW() WHERE id = $2`,
-          [primary.id, contact.id]
+          `
+          UPDATE contact
+          SET linkprecedence = 'secondary', linkedid = $1, updatedat = NOW()
+          WHERE id = $2
+        `,
+          [primaryContact.id, contact.id]
         );
-        contact.linkprecedence = "secondary";
-        contact.linkedid = primary.id;
       }
     }
 
-    // Step 5: Check if the current input is a new email/phone
-    const isNew = !existingContacts.some(
-      (c) => c.email === email && c.phonenumber === phoneNumber
+    const { rows: finalContacts } = await pool.query(
+      `
+      SELECT * FROM contact
+      WHERE (id = $1 OR linkedid = $1)
+      AND deletedat IS NULL
+    `,
+      [primaryContact.id]
     );
 
-    if (isNew) {
-      const insertResult = await pool.query(
-        `INSERT INTO contact (email, phonenumber, linkedid, linkprecedence, createdat, updatedat)
-         VALUES ($1, $2, $3, 'secondary', NOW(), NOW())
-         RETURNING *`,
-        [email, phoneNumber, primary.id]
-      );
-
-      allContacts.push(insertResult.rows[0]);
-    }
-
-    // Step 6: Build response
     const emails = new Set();
     const phoneNumbers = new Set();
-    const secondaryIds = [];
+    const secondaryContactIds = [];
 
-    for (const c of allContacts) {
-      if (c.linkprecedence === "secondary") secondaryIds.push(c.id);
+    for (const c of finalContacts) {
       if (c.email) emails.add(c.email);
       if (c.phonenumber) phoneNumbers.add(c.phonenumber);
+      if (c.linkprecedence === "secondary") secondaryContactIds.push(c.id);
     }
 
     return {
       contact: {
-        primaryContactId: primary.id,
+        primaryContactId: primaryContact.id,
         emails: [...emails],
         phoneNumbers: [...phoneNumbers],
-        secondaryContactIds: secondaryIds,
+        secondaryContactIds,
       },
     };
+  } catch (error) {
+    console.error("Error querying contacts:", error);
+    return { error: "Internal server error" };
   }
-
-  // Step 7: If no match at all, create new primary
-  const { rows } = await pool.query(
-    `INSERT INTO contact (email, phonenumber, linkprecedence, createdat, updatedat)
-     VALUES ($1, $2, 'primary', NOW(), NOW())
-     RETURNING *`,
-    [email, phoneNumber]
-  );
-
-  return {
-    contact: {
-      primaryContactId: rows[0].id,
-      emails: [rows[0].email].filter(Boolean),
-      phoneNumbers: [rows[0].phonenumber].filter(Boolean),
-      secondaryContactIds: [],
-    },
-  };
-};
+}
 
 module.exports = { identifyContact };
