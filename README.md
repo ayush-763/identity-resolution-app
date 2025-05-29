@@ -3,40 +3,17 @@
 As a part of Bitespeed assignment this backend app gives us the functionality to identify the persons who are using different email address or phone numbers to order from Fluxkart.
 The major tech stack used to build this app is: NodeJS, ExpressJS, PostgreSQL
 
+Deployed link: https://identity-resolution-app.onrender.com/identify
+
 ## Procedure to run the app
 
-1. Download the zip file
-2. Install the dependencies
-3. Connect to PostgreSQL in your device
-4. Create the table by the given SQL query:
-CREATE TABLE IF NOT EXISTS public.contact
-(
-    id integer NOT NULL DEFAULT nextval('"Contact_id_seq"'::regclass),
-    phonenumber character varying COLLATE pg_catalog."default",
-    email character varying COLLATE pg_catalog."default",
-    linkedid integer,
-    linkprecedence character varying COLLATE pg_catalog."default" NOT NULL,
-    createdat timestamp with time zone DEFAULT now(),
-    updatedat timestamp with time zone DEFAULT now(),
-    deletedat timestamp with time zone,
-    CONSTRAINT "Contact_pkey" PRIMARY KEY (id),
-    CONSTRAINT "fk_linkedId" FOREIGN KEY (linkedid)
-        REFERENCES public.contact (id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE NO ACTION
-        NOT VALID
-)
+1. Copy the deployed link to POSTMAN
+2. Open a new POST request in POSTMAN and paste the link
+3. We have the following database in use you can use it:
+![image](https://github.com/user-attachments/assets/93e89800-7838-4a76-881a-b10f7af24ae6)
+4. Give the input as raw Body in JSON format for example:
+    {
+       "email": "lorraine@hillvalley.edu"
+       "phoneNumber": "121212"
+    }
 
-OR using pgadmin create table by ensuring these values
-![image](https://github.com/user-attachments/assets/961d6d70-0791-4b7a-822a-e587e0d8354a) make a foreign key fk_linkedid referenced to id and referencing table contact table
-6. Give some data input like this
-INSERT INTO contact (phonenumber, email, linkedid, linkprecedence, createdat, updatedat, deletedat)
-VALUES 
-('123456', 'lorraine@hillvalley.edu', NULL, 'primary', NOW(), NOW(), NULL),
-('123456', 'mcfly@hillvalley.edu', NULL, 'primary', NOW(), NOW(), NULL),
-('919191', 'george@hillvalley.edu', NULL, 'primary', NOW(), NOW(), NULL),
-('717171', 'george@hillvalley.edu', 3, 'secondary', NOW(), NOW(), NULL);
-
-7. After this, run the program.
-8. Use http://localhost:3000/identify in postman
-9. Give the appropriate inputs to see the results
